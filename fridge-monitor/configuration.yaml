@@ -1,0 +1,21 @@
+# ... other configurations ...
+
+input_datetime:
+  fridge_compressor_started_at:
+    name: Fridge Compressor Started At
+    has_date: true
+    has_time: true
+  fridge_door_opened_at:
+    name: Fridge Door Opened At
+    has_date: true
+    has_time: true
+
+input_boolean:
+  fridge_compressor_is_on:
+    name: Fridge Compressor Is On
+    initial: off
+  fridge_door_is_open:
+    name: Fridge Door Is Open
+    initial: off
+
+# ... other configurations ...

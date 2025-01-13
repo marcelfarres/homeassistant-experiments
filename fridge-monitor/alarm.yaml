@@ -1,0 +1,25 @@
+alias: Alert If Fridge Door Open Over 5 Minutes
+description: "Sends a notification to the phone if the fridge door has been open for more than 5 minutes."
+trigger:
+  - platform: state
+    entity_id: input_boolean.fridge_door_is_open
+    to: 'on'
+action:
+  - wait_template: >
+      {% set opened = states('input_datetime.fridge_door_opened_at') %}
+      {% if opened != 'unknown' and opened != '' %}
+        {% set opened_time = strptime(opened, '%Y-%m-%d %H:%M:%S') %}
+        {{ (now() - opened_time).total_seconds() > 300 }}
+      {% else %}
+        false
+      {% endif %}
+    timeout: '00:05:00'
+    continue_on_timeout: false
+  - condition: state
+    entity_id: input_boolean.fridge_door_is_open
+    state: 'on'
+  - service: notify.mobile_app
+    data:
+      title: "Fridge Door Alert"
+      message: "The fridge door has been open for more than 5 minutes."
+mode: single
