@@ -4,24 +4,33 @@ A collection of Home Assistant automations, blueprints, and configurations for v
 
 ## 📑 Projects
 
-### 1. Power State Monitor (`/fridge-monitor`)
+### 1. Power State Monitor
 
-Monitor power consumption of appliances and log their activities to Google Sheets. Perfect for fridges, freezers, washing machines, and more.
+Monitor power consumption of appliances and log their activities to Google Sheets. Available in two versions:
 
-**Two Implementation Options:**
+#### A. Generic Blueprint (`/power-state-monitor`)
 
-1. **Blueprint Version** (`fridge-monitor-blueprint.yaml`):
-   - Single-file solution using Home Assistant's blueprint system
-   - Easy to import and reuse across different devices
-   - Configurable through the UI
-   - Includes smart notifications and Google Sheets logging
-   - Perfect for users who want a plug-and-play solution
+A flexible blueprint that can monitor any appliance with:
 
-2. **Traditional Version** (`logging-automation.yaml` + `configuration.yaml`):
-   - Classic Home Assistant automation approach
-   - Split into separate configuration and automation files
-   - More direct control over the implementation
-   - Good for learning and customization
-   - Better for users who want to understand the underlying mechanics
+- Working state (e.g., compressor, washing, drying)
+- Extra state (e.g., door, water, heating)
+- Configurable state names and thresholds
+- Smart notifications and Google Sheets logging
 
-For detailed documentation, see the project's [README](fridge-monitor/readme.md).
+Perfect for users who want a plug-and-play solution that can be reused for different appliances.
+
+#### B. Fridge Implementation (`/fridge-monitor`)
+
+A specific implementation optimized for refrigerators that tracks:
+
+- Compressor cycles (ON/OFF)
+- Door events (Open/Close)
+- Includes door-open alerts
+- Preconfigured power thresholds
+
+Good example of how to implement the generic blueprint for a specific appliance.
+
+For detailed documentation, see:
+
+- [Generic Blueprint Documentation](power-state-monitor/readme.md)
+- [Fridge Implementation Documentation](fridge-monitor/readme.md)

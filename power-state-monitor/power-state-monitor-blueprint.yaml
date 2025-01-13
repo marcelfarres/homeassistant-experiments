@@ -31,16 +31,7 @@ blueprint:
 
     ## 🔧 SETUP INSTRUCTIONS
 
-    1. **Set up Google Sheets Integration:**
-       - Install Google Sheets integration in HACS if not already installed.
-       - Go to **Settings > Devices & Services > Add Integration > Google Sheets**.
-       - Follow the authentication process.
-       - After setup, go to **Settings > Devices & Services > Google Sheets**.
-       - Click on "Configure" and copy the `config_entry_id`.
-       - Open the Google Sheet that was created during the integration setup.
-       - Create a new worksheet in this specific Google Sheet and note its exact name.
-
-    2. **Create Required Helper Entities:**
+    1. **Create Required Helper Entities:**
        - Create these helpers **before** using the blueprint.
        - Go to **Settings > Devices & Services > Helpers > Create Helper**.
 
@@ -65,12 +56,12 @@ blueprint:
             - **Enable:** Both date and time.
             - **Description:** Records when extra state started.
 
-    3. **Power Sensor Requirements:**
+    2. **Power Sensor Requirements:**
        - Must be a power sensor (W) with frequent updates.
        - For door detection: sensor should update at least every 5 seconds.
        - **Recommended:** Use a power meter with 1-second updates.
 
-    4. **Door Event Detection:**
+    3. **Door Event Detection:**
        - Door Open: Detected immediately when power increases by 30-70W (configurable).
        - Door Close: Has a 2-second delay after power drops by 30-70W to allow power to stabilize.
        - Power changes must occur while the door is in the opposite state.
@@ -97,8 +88,8 @@ blueprint:
       default: 200
       selector:
         number:
-          min: 50
-          max: 5000
+          min: 10
+          max: 4000
           unit_of_measurement: W
           mode: slider
           step: 5
@@ -111,7 +102,7 @@ blueprint:
       selector:
         number:
           min: 0
-          max: 200
+          max: 20
           unit_of_measurement: W
           mode: slider
           step: 5
@@ -123,8 +114,8 @@ blueprint:
       default: 30
       selector:
         number:
-          min: 5
-          max: 100
+          min: 10
+          max: 1000
           unit_of_measurement: W
           mode: slider
           step: 5
@@ -137,36 +128,36 @@ blueprint:
       selector:
         number:
           min: 10
-          max: 3000
+          max: 1000
           unit_of_measurement: W
           mode: slider
           step: 5
 
     # Helper Entities
     is_working_boolean:
-      name: Is Working Helper
-      description: Input Boolean that tracks if device is working
+      name: Working State Boolean
+      description: Helper boolean to track working state.
       selector:
         entity:
           domain: input_boolean
           multiple: false
     working_started_datetime:
-      name: Working Started Helper
-      description: Input DateTime that records when working state started
+      name: Working State Start Time
+      description: Helper datetime to track when working state started.
       selector:
         entity:
           domain: input_datetime
           multiple: false
     extra_state_boolean:
-      name: Extra State Helper
-      description: Input Boolean that tracks extra state (e.g., door open)
+      name: Extra State Boolean
+      description: Helper boolean to track extra state.
       selector:
         entity:
           domain: input_boolean
           multiple: false
-    extra_started_datetime:
-      name: Extra Started Helper
-      description: Input DateTime that records when extra state started
+    extra_state_started_datetime:
+      name: Extra State Start Time
+      description: Helper datetime to track when extra state started.
       selector:
         entity:
           domain: input_datetime
@@ -187,7 +178,13 @@ blueprint:
       name: Google Sheets Config Entry ID
       description: >
         Config Entry ID from Google Sheets integration.
-        Find this in **Settings > Devices & Services > Google Sheets > Configure**
+        To get your config_entry_id:
+        1. Create a new automation in Home Assistant
+        2. Add an action
+        3. Search for "Google Sheets append to sheet"
+        4. Select your sheet from the dropdown menu
+        5. Switch to YAML mode
+        6. Copy the config_entry value shown in the action
       selector:
         text:
     worksheet_name:
@@ -209,22 +206,22 @@ blueprint:
           integration: mobile_app
           multiple: true
     notify_web_ui:
-      name: Show in Web UI
-      description: Show notifications in Home Assistant web UI
+      name: Show Web UI Notifications
+      description: Whether to show notifications in Home Assistant UI.
       default: true
       selector:
         boolean:
-    notify_door_timeout:
-      name: Door Open Alert Timeout
+    notify_extra_state_timeout:
+      name: Extra State Alert Timeout
       description: >
-        Minutes before alerting about door left open.
+        Minutes before alerting about extra state left active.
         Set to 0 to disable this alert.
       default: 5
       selector:
         number:
           min: 0
           max: 60
-          unit_of_measurement: minutes
+          unit_of_measurement: min
           mode: box
           step: 1
     notify_cycle_complete:
@@ -237,15 +234,29 @@ blueprint:
         boolean:
     notification_title:
       name: Notification Title
-      description: Title prefix for all notifications
-      default: "Device Status"
+      description: Title for notifications.
+      default: Power State Monitor
+      selector:
+        text:
+
+    # State Names
+    working_state_name:
+      name: Working State Name
+      description: Name for the working state (e.g., Compressor, Washing, Drying).
+      default: Working
+      selector:
+        text:
+    extra_state_name:
+      name: Extra State Name
+      description: Name for the extra state (e.g., Door, Water, Heating).
+      default: Extra
       selector:
         text:
 
 variables:
   power_sensor_entity: !input power_sensor
   working_started_entity: !input working_started_datetime
-  extra_started_entity: !input extra_started_datetime
+  extra_started_entity: !input extra_state_started_datetime
   extra_power_min: !input extra_power_min
   extra_power_max: !input extra_power_max
   min_power: "{{ states(power_sensor_entity) | float }}"
@@ -261,7 +272,7 @@ variables:
       {{ 0 }}
     {% endif %}
   door_elapsed_minutes: >
-    {% set start_time = states(extra_started_entity) %}
+    {% set start_time = states(extra_state_started_datetime) %}
     {% if start_time not in ['unknown', '', 'unavailable'] %}
       {% set start = as_datetime(start_time) | as_local %}
       {% set now = now() | as_local %}
@@ -274,6 +285,8 @@ variables:
   current_power: "{{ trigger.to_state.state | float if trigger.to_state.state not in ['unknown', 'unavailable'] else none }}"
   previous_power: "{{ trigger.from_state.state | float if trigger.from_state.state not in ['unknown', 'unavailable'] else none }}"
   power_change: "{{ current_power - previous_power if current_power is not none and previous_power is not none else none }}"
+  working_state_name: !input working_state_name
+  extra_state_name: !input extra_state_name
 
 trigger:
   - platform: state
@@ -289,7 +302,7 @@ action:
             value_template: "{{ current_power is not none and previous_power is not none }}"
         sequence:
           - choose:
-              # Door Open Event (power spike)
+              # Extra State ON Event (power spike)
               - conditions:
                   - condition: template
                     value_template: >
@@ -305,7 +318,7 @@ action:
                       entity_id: !input extra_state_boolean
                   - service: input_datetime.set_datetime
                     target:
-                      entity_id: !input extra_started_datetime
+                      entity_id: !input extra_state_started_datetime
                     data:
                       datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
                   - service: google_sheets.append_sheet
@@ -315,26 +328,26 @@ action:
                       data:
                         Date: "{{ now().strftime('%-d-%b-%y') }}"
                         Time: "{{ now().strftime('%H:%M:%S') }}"
-                        State: "Door Open"
-                        "Power Change": "{{ power_change }}W"
+                        State: "{{ extra_state_name }} ON"
+                        "Power Change": "{{ '%.1f' | format(power_change) }}W"
                         "Elapsed Time": "00:00:00"
                         "Elapsed Minutes": 0
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ should_notify and notify_door_timeout > 0 }}"
+                            value_template: "{{ should_notify and notify_extra_state_timeout > 0 }}"
                         sequence:
                           - delay:
-                              minutes: "{{ notify_door_timeout | float }}"
+                              minutes: "{{ notify_extra_state_timeout | float }}"
                           - condition: state
                             entity_id: !input extra_state_boolean
                             state: "on"
                           - service: notify.notify
                             data:
                               title: "{{ notification_title }}"
-                              message: "{{ worksheet_name | title | replace('_', ' ') }} door has been open for {{ notify_door_timeout }} minutes!"
+                              message: "{{ worksheet_name | title | replace('_', ' ') }} {{ extra_state_name | title | replace('_', ' ') }} has been ON for {{ notify_extra_state_timeout }} minutes!"
                               data:
-                                tag: "door_open_timeout"
+                                tag: "extra_state_timeout"
                           - if:
                               - condition: template
                                 value_template: "{{ notify_web_ui }}"
@@ -342,9 +355,9 @@ action:
                               - service: persistent_notification.create
                                 data:
                                   title: "{{ notification_title }}"
-                                  message: "{{ worksheet_name | title | replace('_', ' ') }} door has been open for {{ notify_door_timeout }} minutes!"
-                                  notification_id: "door_open_timeout"
-              # Door Close Event (power drop)
+                                  message: "{{ worksheet_name | title | replace('_', ' ') }} {{ extra_state_name | title | replace('_', ' ') }} has been ON for {{ notify_extra_state_timeout }} minutes!"
+                                  notification_id: "extra_state_timeout"
+              # Extra State OFF Event (power drop)
               - conditions:
                   - condition: template
                     value_template: >
@@ -367,10 +380,10 @@ action:
                       data:
                         Date: "{{ now().strftime('%-d-%b-%y') }}"
                         Time: "{{ now().strftime('%H:%M:%S') }}"
-                        State: "Door Closed"
-                        "Power Change": "{{ power_change }}W"
-                        "Elapsed Time": "{{ '%02d:%02d:%02d' | format((door_elapsed_minutes * 60 // 3600)|int, ((door_elapsed_minutes * 60 % 3600) // 60)|int, (door_elapsed_minutes * 60 % 60)|int) }}"
-                        "Elapsed Minutes": "{{ door_elapsed_minutes }}"
+                        State: "{{ extra_state_name }} OFF"
+                        "Power Change": "{{ '%.1f' | format(power_change) }}W"
+                        "Elapsed Time": "{{ '%02d:%02d:%02d' | format((extra_state_elapsed_minutes * 60 // 3600)|int, ((extra_state_elapsed_minutes * 60 % 3600) // 60)|int, (extra_state_elapsed_minutes * 60 % 60)|int) }}"
+                        "Elapsed Minutes": "{{ extra_state_elapsed_minutes }}"
                   - if:
                       - condition: template
                         value_template: "{{ should_notify }}"
@@ -379,19 +392,19 @@ action:
                         data:
                           message: "clear_notification"
                           data:
-                            tag: "door_open_timeout"
+                            tag: "extra_state_timeout"
                       - if:
                           - condition: template
                             value_template: "{{ notify_web_ui }}"
                         then:
                           - service: persistent_notification.dismiss
                             data:
-                              notification_id: "door_open_timeout"
+                              notification_id: "extra_state_timeout"
               # Compressor ON Event
               - conditions:
                   - condition: numeric_state
                     entity_id: !input power_sensor
-                    above: 200
+                    above: !input working_power_threshold
                   - condition: state
                     entity_id: !input is_working_boolean
                     state: "off"
@@ -411,10 +424,10 @@ action:
                       data:
                         Date: "{{ now().strftime('%-d-%b-%y') }}"
                         Time: "{{ now().strftime('%H:%M:%S') }}"
-                        State: "Compressor ON"
-                        Power Change: "{{ power_change }}W"
-                        Elapsed Time: "00:00:00"
-                        Elapsed Minutes: 0
+                        State: "{{ working_state_name }} ON"
+                        "Power Change": "{{ '%.1f' | format(power_change) }}W"
+                        "Elapsed Time": "00:00:00"
+                        "Elapsed Minutes": 0
               # Compressor OFF Event
               - conditions:
                   - condition: numeric_state
@@ -434,10 +447,15 @@ action:
                       data:
                         Date: "{{ now().strftime('%-d-%b-%y') }}"
                         Time: "{{ now().strftime('%H:%M:%S') }}"
-                        State: "Compressor OFF"
-                        "Power Change": "{{ power_change }}W"
+                        State: "{{ working_state_name }} OFF"
+                        "Power Change": "{{ '%.1f' | format(power_change) }}W"
                         "Elapsed Time": "{{ '%02d:%02d:%02d' | format((elapsed_minutes * 60 // 3600)|int, ((elapsed_minutes * 60 % 3600) // 60)|int, (elapsed_minutes * 60 % 60)|int) }}"
                         "Elapsed Minutes": "{{ elapsed_minutes }}"
+                  - service: input_datetime.set_datetime
+                    target:
+                      entity_id: !input working_started_datetime
+                    data:
+                      datetime: ""
                   - choose:
                       - conditions:
                           - condition: template

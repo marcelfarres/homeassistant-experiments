@@ -1,0 +1,29 @@
+# Home Assistant secrets
+secrets.yaml
+ip_bans.yaml
+known_devices.yaml
+
+# Home Assistant runtime files
+*.db
+*.db-shm
+*.db-wal
+*.log
+.storage
+.cloud
+
+# Home Assistant backups
+*.backup
+
+# Project specific
+*.pyc
+__pycache__
+.DS_Store
+.env
+
+# IDE specific
+.vscode/
+.idea/
+*.code-workspace
+
+# Keep templates
+!secrets.template.yaml 

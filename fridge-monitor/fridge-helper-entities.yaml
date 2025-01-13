@@ -1,5 +1,7 @@
 # ... other configurations ...
 
+# Helper entities for tracking fridge states
+
 input_datetime:
   fridge_compressor_started_at:
     name: Fridge Compressor Started At
@@ -13,9 +15,11 @@ input_datetime:
 input_boolean:
   fridge_compressor_is_on:
     name: Fridge Compressor Is On
+    icon: mdi:power
     initial: off
   fridge_door_is_open:
     name: Fridge Door Is Open
+    icon: mdi:power
     initial: off
 
 # ... other configurations ...

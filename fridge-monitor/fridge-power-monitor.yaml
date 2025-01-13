@@ -1,0 +1,168 @@
+# Configuration Variables
+variables:
+  compressor_power_threshold: 200    # Power threshold to detect compressor ON
+  door_power_min: 30                 # Minimum power change when door opens/closes
+  door_power_max: 70                 # Maximum power change when door opens/closes
+  idle_power_threshold: 20           # Power threshold when fridge is idle
+  worksheet_name: "fridge_power_log"      # Name of the Google Sheets worksheet
+
+alias: Log Fridge Compressor and Door Activity
+description: "Logs fridge compressor and door activity with duration to Google Sheets."
+
+trigger:
+  - platform: state
+    entity_id: sensor.fridge_power
+    
+mode: parallel
+max: 10
+
+variables:
+  current_power: "{{ trigger.to_state.state | float if trigger.to_state.state not in ['unknown', 'unavailable'] else none }}"
+  previous_power: "{{ trigger.from_state.state | float if trigger.from_state.state not in ['unknown', 'unavailable'] else none }}"
+  power_change: "{{ current_power - previous_power if current_power is not none and previous_power is not none else none }}"
+
+action:
+  - choose:
+      # Compressor ON
+      - conditions:
+          - condition: numeric_state
+            entity_id: sensor.fridge_power
+            above: "{{ compressor_power_threshold }}"
+          - condition: state
+            entity_id: input_boolean.fridge_compressor_is_on
+            state: "off"
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.fridge_compressor_is_on
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.fridge_compressor_started_at
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - service: google_sheets.append_sheet
+            data:
+              config_entry: !secret google_sheets_config_entry_id
+              worksheet: "{{ worksheet_name }}"
+              data:
+                Date: "{{ now().strftime('%-d-%b-%y') }}"
+                Time: "{{ now().strftime('%H:%M:%S') }}"
+                State: "Compressor ON"
+                "Power Change": "{{ '%.1f' | format(power_change) }}W"
+                "Elapsed Time": "00:00:00"
+                "Elapsed Minutes": 0
+
+      # Compressor OFF
+      - conditions:
+          - condition: numeric_state
+            entity_id: sensor.fridge_power
+            below: "{{ idle_power_threshold }}"
+          - condition: state
+            entity_id: input_boolean.fridge_compressor_is_on
+            state: "on"
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.fridge_compressor_is_on
+          - service: google_sheets.append_sheet
+            data:
+              config_entry: !secret google_sheets_config_entry_id
+              worksheet: "{{ worksheet_name }}"
+              data:
+                Date: "{{ now().strftime('%-d-%b-%y') }}"
+                Time: "{{ now().strftime('%H:%M:%S') }}"
+                State: "Compressor OFF"
+                "Power Change": "{{ '%.1f' | format(power_change) }}W"
+                "Elapsed Time": >
+                  {% set started = states('input_datetime.fridge_compressor_started_at') %}
+                  {% if started != 'unknown' and started != '' %}
+                    {% set started_time = strptime(started, '%Y-%m-%d %H:%M:%S') %}
+                    {% set duration = (now() - started_time).total_seconds() %}
+                    {{ '%02d:%02d:%02d' | format((duration // 3600)|int, ((duration % 3600) // 60)|int, (duration % 60)|int) }}
+                  {% else %}
+                    00:00:00
+                  {% endif %}
+                "Elapsed Minutes": >
+                  {% set started = states('input_datetime.fridge_compressor_started_at') %}
+                  {% if started != 'unknown' and started != '' %}
+                    {% set started_time = strptime(started, '%Y-%m-%d %H:%M:%S') %}
+                    {% set duration = (now() - started_time).total_seconds() %}
+                    {{ (duration / 60) | round(2) }}
+                  {% else %}
+                    0
+                  {% endif %}
+
+      # Door Open
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ power_change is not none and
+                 power_change > (door_power_min | float(0)) and 
+                 power_change < (door_power_max | float(0)) }}
+          - condition: state
+            entity_id: input_boolean.fridge_door_is_open
+            state: "off"
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.fridge_door_is_open
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.fridge_door_opened_at
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - service: google_sheets.append_sheet
+            data:
+              config_entry: !secret google_sheets_config_entry_id
+              worksheet: "{{ worksheet_name }}"
+              data:
+                Date: "{{ now().strftime('%-d-%b-%y') }}"
+                Time: "{{ now().strftime('%H:%M:%S') }}"
+                State: "Door Open"
+                "Power Change": "{{ '%.1f' | format(power_change) }}W"
+                "Elapsed Time": "00:00:00"
+                "Elapsed Minutes": 0
+
+      # Door Close
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ power_change is not none and
+                 power_change < -(door_power_min | float(0)) and 
+                 power_change > -(door_power_max | float(0)) }}
+          - condition: state
+            entity_id: input_boolean.fridge_door_is_open
+            state: "on"
+        sequence:
+          - delay:
+              seconds: 2
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.fridge_door_is_open
+          - service: google_sheets.append_sheet
+            data:
+              config_entry: !secret google_sheets_config_entry_id
+              worksheet: "{{ worksheet_name }}"
+              data:
+                Date: "{{ now().strftime('%-d-%b-%y') }}"
+                Time: "{{ now().strftime('%H:%M:%S') }}"
+                State: "Door Close"
+                "Power Change": "{{ '%.1f' | format(power_change) }}W"
+                "Elapsed Time": >
+                  {% set opened = states('input_datetime.fridge_door_opened_at') %}
+                  {% if opened != 'unknown' and opened != '' %}
+                    {% set opened_time = strptime(opened, '%Y-%m-%d %H:%M:%S') %}
+                    {% set duration = (now() - opened_time).total_seconds() %}
+                    {{ '%02d:%02d:%02d' | format((duration // 3600)|int, ((duration % 3600) // 60)|int, (duration % 60)|int) }}
+                  {% else %}
+                    00:00:00
+                  {% endif %}
+                "Elapsed Minutes": >
+                  {% set opened = states('input_datetime.fridge_door_opened_at') %}
+                  {% if opened != 'unknown' and opened != '' %}
+                    {% set opened_time = strptime(opened, '%Y-%m-%d %H:%M:%S') %}
+                    {% set duration = (now() - opened_time).total_seconds() %}
+                    {{ (duration / 60) | round(2) }}
+                  {% else %}
+                    0
+                  {% endif %} 

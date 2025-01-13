@@ -1,132 +1,212 @@
-# Power State Monitor
+# Fridge Power Monitor
 
-## 📋 Implementation Options
+A Home Assistant implementation for monitoring fridge power consumption and logging activities to Google Sheets.
 
-This project offers two ways to implement the power state monitoring:
+## ⚠️ Prerequisites
 
-1. **Blueprint Implementation** (`fridge-monitor-blueprint.yaml`):
-   - Single file containing all logic and configuration
-   - Easy to import through Home Assistant UI
-   - Configurable through a user-friendly interface
-   - Includes smart notifications out of the box
-   - Recommended for most users
+1. **Home Assistant Installation:**
+   - Home Assistant with configuration directory access
+   - ⚠️ **VERIFY**: Check Home Assistant version compatibility
 
-2. **Traditional Implementation** (`logging-automation.yaml` + `configuration.yaml`):
-   - Split into separate automation and configuration files
-   - More direct and transparent implementation
-   - Easier to modify and customize
-   - Good for learning how the automation works
-   - Recommended for advanced users or learning purposes
+2. **Power Monitoring Device:**
+   - Smart plug or power meter with:
+     - Power readings in watts
+     - Update frequency of 5 seconds or faster
+     - ⚠️ **CRITICAL**: Some smart plugs only report current (A) or voltage (V). These will NOT work.
+     - ⚠️ **CRITICAL**: Ensure your power meter can handle the maximum current of your fridge.
+     - ⚠️ **VERIFY**: Test power readings before proceeding with setup.
 
-The documentation below focuses on the Blueprint implementation, which is the recommended approach for most users.
+3. **Google Account:**
+   - Google account with access to Google Drive
+   - Google Cloud Console access
+   - ⚠️ **IMPORTANT**: Keep OAuth credentials secure
 
-## 🎯 Overview
+## 📋 Implementation Files
 
-This blueprint monitors power consumption of appliances and logs their activities to Google Sheets. It's designed to work with both two-state devices (like freezers) and three-state devices (like refrigerators with door lights).
+1. **`fridge-power-monitor.yaml`**:
+   - Main automation for monitoring power and logging state changes
+   - Detects compressor and door events based on power thresholds
+   - Logs events to Google Sheets with elapsed time
+   - ⚠️ **NOTE**: Requires `secrets.yaml` configuration
 
-### **Key Features:**
+2. **`fridge-door-alert.yaml`**:
+   - Automation that alerts when the door is left open
+   - Configurable timeout (default: 5 minutes)
+   - Sends notifications to your phone
+   - ⚠️ **NOTE**: Test notifications after setup
 
-1. **Power State Detection:**
-   - Detects working/idle states (compressor)
-   - Door open/close detection
-   - Logs all events to Google Sheets
-   - Smart notifications
+3. **`fridge-helper-entities.yaml`**:
+   - Helper entities for state tracking
+   - Input booleans for compressor and door states
+   - Input datetimes for timing calculations
+   - ⚠️ **IMPORTANT**: Create these before setting up automations
 
-2. **Notifications:**
-   - Door left open warnings (configurable timeout)
-   - Cycle completion alerts (e.g., washer finished)
-   - Mobile app & web UI notifications
-   - Persistent notifications until acknowledged
+## 🔧 Setup Instructions
 
-### **Key Points:**
+1. **Create Helper Entities:**
+   - Copy the contents of `fridge-helper-entities.yaml` to your Home Assistant configuration
+   - Restart Home Assistant to create the entities
+   - ⚠️ **VERIFY**: Check that all helper entities are created successfully
 
-1. **Triggers:**
-   - The automation is triggered **whenever the power sensor changes its state**.
+2. **Set up Google Sheets Integration:**
 
-2. **State Detection:**
-   - **Compressor ON:**
-     - **Conditions:**
-       - Power > Working Power Threshold (default: 200W)
-       - Compressor is not already marked as ON
-     - **Actions:**
-       - Turn on the compressor `input_boolean`
-       - Set the compressor start time
-       - Log "Compressor ON" to Google Sheets
+   ### A. Configure Google Cloud Console
 
-   - **Compressor OFF:**
-     - **Conditions:**
-       - Power < Idle Power Threshold (default: 5W)
-       - Compressor is currently marked as ON
-     - **Actions:**
-       - Turn off the compressor `input_boolean`
-       - Log "Compressor OFF" with elapsed times
-       - Send notification if cycle completion alerts enabled
-       - Clear the compressor start time
+   1. Go to [Google Developers Console](https://console.developers.google.com/)
+   2. Enable both **Google Drive API** and **Google Sheets API**
+   3. Set up OAuth consent screen:
+      - Select **External**
+      - Set app name and contact info
+      - Set status to **In production**
+   4. Create OAuth credentials:
+      - Create **Web application** credentials
+      - Add redirect URI: `https://my.home-assistant.io/redirect/oauth`
+      - Save your **Client ID** and **Client secret**
 
-   - **Door Open:**
-     - **Conditions:**
-       - Power increase between Extra Power Min and Max (default: 30-70W)
-       - Door is not already marked as open
-     - **Actions:**
-       - Turn on the door `input_boolean`
-       - Set the door opened time
-       - Log "Door Open" to Google Sheets
-       - Start door timeout monitoring if enabled
+   ### B. Configure Home Assistant
 
-   - **Door Closed:**
-     - **Conditions:**
-       - Power decrease between -Extra Power Min and -Extra Power Max
-       - Door is currently marked as open
-     - **Actions:**
-       - 2-second delay to allow power stabilization
-       - Turn off the door `input_boolean`
-       - Log "Door Closed" with elapsed times
-       - Clear any door timeout notifications
+   - Go to **Settings > Devices & Services > Add Integration > Google Sheets**
+   - Enter your OAuth credentials and follow the authentication process
+   - Note: You need access to Google Drive and Google Cloud Console
+   - Important: Use simple worksheet names without spaces or special characters
+   - The integration will automatically create required headers
 
-3. **Smart Features:**
-   - **Preventing Duplicate Entries:**
-     - Uses `input_boolean` entities to track current states
-     - Ensures state changes are logged only once
+   ⚠️ **IMPORTANT**: New credentials may take up to 5 hours to activate
 
-   - **Door Event Detection:**
-     - Immediate detection of door open events
-     - 2-second delay for door close events
-     - Handles multiple power changes during delay
+3. **Configure Secrets:**
+   - Create or edit `secrets.yaml` in your Home Assistant config directory
+   - To get your `config_entry_id`:
+     1. Create a new automation in Home Assistant
+     2. Add an action
+     3. Search for "Google Sheets append to sheet"
+     4. Select your sheet from the dropdown menu
+     5. Switch to YAML mode
+     6. Copy the `config_entry` value shown in the action
+   - Add to your `secrets.yaml`:
 
-   - **Notifications:**
-     - Configurable door timeout (default: 5 minutes)
-     - Optional cycle completion alerts
-     - Both mobile and web UI notifications
-     - Automatic notification clearing
+     ```yaml
+     # Google Sheets Configuration
+     google_sheets_config_entry_id: "YOUR_CONFIG_ENTRY_ID"  # Get this from the automation YAML
+     ```
 
-4. **Time Tracking:**
-   - **Elapsed Time Calculation:**
-     - Human-readable format (HH:MM:SS)
-     - Machine-readable format (minutes)
-     - Automatic error handling for missing timestamps
+   - ⚠️ **SECURITY**: Never share your `secrets.yaml` file
+   - ⚠️ **IMPORTANT**: Add `secrets.yaml` to your `.gitignore`
 
-5. **Google Sheets Integration:**
-   - **Worksheet Structure:**
-     - **Date:** DD-Mon-YY format
-     - **Time:** HH:MM:SS format
-     - **State:** Current state change
-     - **Power Change:** Power difference in watts
-     - **Elapsed Time:** Duration in HH:MM:SS
-     - **Elapsed Minutes:** Duration in minutes
+4. **Configure Worksheet:**
+   - The default worksheet name is "Sheet1"
+   - You can change this by updating the `worksheet_name` variable in `fridge-power-monitor.yaml`
+   - Example names: "Sheet1", "W1", "FridgeLog"
+   - ⚠️ **CRITICAL**: Do NOT use spaces or special characters in worksheet names
+   - ⚠️ **VERIFY**: The worksheet must exist before running the automation
 
-6. **Power Reference Values:**
-   - **Two-State Devices:**
-     - Washing Machine: 1.2W idle, 350-500W working
-     - Dryer: 2-3W idle, 800-1000W working
-     - Freezer: 0-2W idle, 150-300W working
+5. **Configure Power Sensor:**
+   - Update `sensor.fridge_power` in the automations to match your power sensor
+   - Sensor must provide power readings in watts
+   - Should update frequently (at least every 5 seconds)
+   - Recommended: Use a power meter with 1-second updates
+   - ⚠️ **VERIFY**: Check that your sensor reports values correctly
+   - ⚠️ **IMPORTANT**: Validate sensor state values are not 'unknown' or 'unavailable'
 
-   - **Three-State Devices:**
-     - Modern Fridge:
-       - Idle: 0-2W
-       - Compressor: 150-250W
-       - Door Events: 35-70W change
-       - Water/Ice: 40-80W spike
+6. **Configure Notifications:**
+   - Update the notification service in `fridge-door-alert.yaml`
+   - Default: `notify.mobile_app` (change to your device's notify service)
 
----
+## 🎯 Default Power Thresholds
 
-For detailed setup instructions and configuration options, please refer to the blueprint description in Home Assistant.
+- **Compressor Detection:**
+  - ON: Power > 200W
+  - OFF: Power < 20W
+  - ⚠️ **NOTE**: These thresholds may need adjustment for your specific fridge model
+
+- **Door Events:**
+  - Open: Power increase between 30W and 70W
+  - Close: Power decrease between -30W and -70W
+  - ⚠️ **IMPORTANT**: These values assume a door light is present and it is not LED.
+
+## 📊 Power Reference Values
+
+Modern Fridge Power States:
+
+- Idle (Compressor OFF): 0-2W
+- Working (Compressor ON): 150-250W
+- Door Open: +35W to +70W spike
+- Door Close: -35W to -70W drop
+- Water/Ice Dispenser: +40W to +80W spike
+- ⚠️ **NOTE**: Your values may vary based on fridge model and features
+
+## 🔍 State Detection Logic
+
+1. **Compressor State:**
+   - ON when power exceeds 200W and compressor was off
+   - OFF when power drops below 20W and compressor was on
+   - Logs duration when turning off
+   - ⚠️ **NOTE**: Brief power fluctuations are filtered out
+   - ⚠️ **IMPORTANT**: Monitor initial cycles to verify thresholds
+
+2. **Door State:**
+   - OPEN when power increases by 30-70W and door was closed
+   - CLOSED when power decreases by 30-70W and door was open
+   - ⚠️ **CRITICAL**: 2-second delay on door close for power stabilization
+   - ⚠️ **NOTE**: Door events require a working door light
+   - Logs duration when closing
+
+## 📝 Notes
+
+- Implementation is optimized for refrigerators with door lights
+- Power thresholds may need adjustment for your specific model
+- Door events are detected by the power change from the door light
+- Google Sheets logging includes timestamps and durations
+- Alert system notifies if door left open over 5 minutes
+
+## ⚠️ Troubleshooting
+
+1. **Missing Events:**
+   - Verify power sensor update frequency
+   - Check if power thresholds match your fridge
+   - Look for overlapping events in logs
+
+2. **False Detections:**
+   - Increase minimum power thresholds
+   - Check for other appliances on same circuit
+   - Verify door light functionality
+
+3. **Google Sheets Issues:**
+   - Confirm worksheet exists and is accessible
+   - Check `config_entry_id` in secrets
+   - Verify Google Sheets integration status
+   - Check OAuth consent screen is "In production"
+   - Verify both Drive and Sheets APIs are enabled
+   - Check redirect URI is exactly correct
+   - Try deleting and recreating credentials if issues persist
+
+4. **Notification Problems:**
+   - Check mobile app configuration
+   - Verify notification service name
+   - Test with Home Assistant companion app
+
+5. **Power Reading Issues:**
+   - Verify sensor provides watts (not amps or volts)
+   - Check sensor update frequency
+   - Monitor for 'unknown' or 'unavailable' states
+   - ⚠️ **TIP**: Use Developer Tools to watch power values
+   - ⚠️ **NOTE**: If sensor provides amps and volts separately, create a template sensor:
+
+     ```yaml
+     template:
+       - sensor:
+           name: "Fridge Power in Watts"
+           unit_of_measurement: "W"
+           state: >
+             {% set amps = states('sensor.fridge_amps') | float %}
+             {% set volts = states('sensor.fridge_volts') | float %}
+             {{ (amps * volts) | round(1) }}
+     ```
+
+6. **Event Detection Issues:**
+   - Check power thresholds match your fridge
+   - Monitor power graphs to determine optimal delay timing
+   - Adjust delay if events are being missed (5-10 seconds may be needed)
+   - Verify parallel mode is working correctly
+   - ⚠️ **TIP**: Use Energy dashboard or Developer Tools to analyze power patterns
+
+For a more generic implementation that can be used with other appliances, see the [Power State Monitor Blueprint](../power-state-monitor/power-state-monitor-blueprint.yaml).

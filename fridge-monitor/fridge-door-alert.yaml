@@ -6,10 +6,10 @@ trigger:
     to: 'on'
 action:
   - wait_template: >
-      {% set opened = states('input_datetime.fridge_door_opened_at') %}
-      {% if opened != 'unknown' and opened != '' %}
-        {% set opened_time = strptime(opened, '%Y-%m-%d %H:%M:%S') %}
-        {{ (now() - opened_time).total_seconds() > 300 }}
+      {% set started = states('input_datetime.fridge_door_opened_at') %}
+      {% if started != 'unknown' and started != '' %}
+        {% set started_time = strptime(started, '%Y-%m-%d %H:%M:%S') %}
+        {{ (now() - started_time).total_seconds() > 300 }}
       {% else %}
         false
       {% endif %}
@@ -22,4 +22,4 @@ action:
     data:
       title: "Fridge Door Alert"
       message: "The fridge door has been open for more than 5 minutes."
-mode: single
+mode: single 
