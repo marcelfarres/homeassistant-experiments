@@ -271,8 +271,8 @@ variables:
     {% else %}
       {{ 0 }}
     {% endif %}
-  door_elapsed_minutes: >
-    {% set start_time = states(extra_state_started_datetime) %}
+  extra_state_elapsed_minutes: >
+    {% set start_time = states(extra_started_entity) %}
     {% if start_time not in ['unknown', '', 'unavailable'] %}
       {% set start = as_datetime(start_time) | as_local %}
       {% set now = now() | as_local %}
